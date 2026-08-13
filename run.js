@@ -53,6 +53,7 @@ Options:
   --open <id-or-path>   Recover a previous session; use latest for the newest one.
   --list                List sessions newest first without launching Chrome.
   --agent <name>        Initial coding agent (default: saved selection or pi).
+  --model <id>          Pi model as id or provider/id; saved for this session.
   --verbose             Stream prefills and all structured agent/tool events.
   --memory <mode>       Agent continuity mode: managed or ephemeral.
   --inline <source>     Run a JSON sequence; source is JSON, @file, or stdin (-).
@@ -69,6 +70,7 @@ Environment:
   BROWSERCTL_RUN_DIR
   CHROME_PATH
   BROWSERCTL_PI_BIN
+  BROWSERCTL_PI_MODEL
   BROWSERCTL_CODEX_BIN
   BROWSERCTL_CLAUDE_BIN
   VISUAL or EDITOR
@@ -112,6 +114,9 @@ function parseArguments(argv) {
     } else if (argument === '--url') {
       options.targetUrl = requireValue(index, argument);
       options.targetUrlExplicit = true;
+      index += 1;
+    } else if (argument === '--model') {
+      options.piModel = requireValue(index, argument);
       index += 1;
     } else if (argument === '--chrome') {
       options.chromePath = requireValue(index, argument);
@@ -331,6 +336,7 @@ async function main(argv = process.argv.slice(2)) {
     runner = new AgentRunner(session, store, {
       workspaceRoot: RUN_DIRECTORY,
       agent: options.agent || session.manifest.selectedAgent || 'pi',
+      piModel: options.piModel,
       browserContextProvider: async () => {
         if (browser) return browser.agentContext();
         return {
@@ -351,6 +357,7 @@ async function main(argv = process.argv.slice(2)) {
     if (options.agent && options.agent !== session.manifest.selectedAgent) {
       await runner.select(options.agent);
     }
+    if (options.piModel) await runner.setPiModel(options.piModel);
 
     const onSignal = (signal) => {
       signalReceived = signal;

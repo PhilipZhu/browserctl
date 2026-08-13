@@ -761,3 +761,54 @@ test('inline execution preserves JSONL stdout and keeps agent details on stderr'
   assert.equal(lines[0].result, 'final answer');
   assert.equal(lines[1].result.connected, false);
 });
+
+test('pi model preferences parse, resolve, apply, and persist', async () => {
+  const { parsePiModelPreference } = require('../lib/agent-runner');
+  assert.deepEqual(parsePiModelPreference('alpha-large'), { provider: null, id: 'alpha-large' });
+  assert.deepEqual(parsePiModelPreference('alpha/alpha-large'), { provider: 'alpha', id: 'alpha-large' });
+  assert.deepEqual(parsePiModelPreference({ provider: 'alpha', id: 'x' }), { provider: 'alpha', id: 'x' });
+  assert.equal(parsePiModelPreference(''), null);
+  assert.equal(parsePiModelPreference('alpha/'), null);
+
+  const updates = [];
+  const runner = new AgentRunner(fakeSession(), { update: async (session, patch) => updates.push(patch) }, {
+    workspaceRoot: '/tmp/workspace',
+  });
+  const setCalls = [];
+  runner.worker = {
+    status: () => ({ model: { provider: 'alpha', id: 'alpha-small', name: 'alpha-small' } }),
+    availableModels: async () => [
+      { provider: 'alpha', id: 'alpha-small', name: 'alpha-small' },
+      { provider: 'alpha', id: 'alpha-large', name: 'alpha-large' },
+    ],
+    setModel: async (model) => { setCalls.push(model); return model; },
+  };
+
+  // Bare id resolves its provider against the live worker and persists.
+  const selected = await runner.setPiModel('alpha-large');
+  assert.deepEqual(selected, { provider: 'alpha', id: 'alpha-large', name: 'alpha-large' });
+  assert.deepEqual(setCalls, [{ provider: 'alpha', id: 'alpha-large', name: 'alpha-large' }]);
+  assert.deepEqual(updates, [{ selectedPiModel: { provider: 'alpha', id: 'alpha-large' } }]);
+
+  // Unknown ids are rejected with the available list, and nothing is persisted.
+  await assert.rejects(() => runner.setPiModel('missing-model'), /not available/);
+  assert.equal(updates.length, 1);
+});
+
+test('pi model preference precedence is option, then manifest, then environment', () => {
+  const store = { update: async () => {} };
+  const manifestSession = fakeSession();
+  manifestSession.manifest.selectedPiModel = { provider: 'alpha', id: 'from-manifest' };
+
+  process.env.BROWSERCTL_PI_MODEL = 'from-environment';
+  try {
+    const fromOption = new AgentRunner(manifestSession, store, { workspaceRoot: '/tmp/w', piModel: 'alpha/from-option' });
+    assert.deepEqual(fromOption.piPreferredModel, { provider: 'alpha', id: 'from-option' });
+    const fromManifest = new AgentRunner(manifestSession, store, { workspaceRoot: '/tmp/w' });
+    assert.deepEqual(fromManifest.piPreferredModel, { provider: 'alpha', id: 'from-manifest' });
+    const fromEnvironment = new AgentRunner(fakeSession(), store, { workspaceRoot: '/tmp/w' });
+    assert.deepEqual(fromEnvironment.piPreferredModel, { provider: null, id: 'from-environment' });
+  } finally {
+    delete process.env.BROWSERCTL_PI_MODEL;
+  }
+});

@@ -61,6 +61,22 @@ Tell me what is on this page and keep the useful tab open.
 
 Enter `/quit` to save the session and stop browserctl cleanly.
 
+## Choose the agent model
+
+The Pi worker starts with your Pi installation's default model. Override it from
+browserctl itself, in order of precedence:
+
+- `/model <id>` in the console (or `/model` to list) — switches live and saves
+  the choice for this session;
+- `./run.js --open <session> --model <id>` (or `provider/id`) — applies and
+  saves the choice for that session;
+- `BROWSERCTL_PI_MODEL=<id>` in the environment — the default for sessions with
+  no saved choice.
+
+Saved choices live in the session manifest, so a reopened session keeps its
+model. If a model turns out unresponsive mid-run, browserctl still falls back
+automatically to a responsive one for the rest of the service process.
+
 ## Continue later
 
 Reopen or inspect sessions:

@@ -122,7 +122,7 @@ readline.createInterface({input: process.stdin}).on('line', (line) => {
   const secondShown = [];
   const second = await runner.run('complete another request', (chunk) => secondShown.push(chunk));
   assert.match(second, /completed after safe model failover/);
-  assert.match(secondShown.join(''), /Using previously responsive Pi model working-default/);
+  assert.match(secondShown.join(''), /Using Pi model working-default/);
   assert.doesNotMatch(secondShown.join(''), /empty, tool-free pass/);
   const turns = (await conversations.records()).filter((record) => record.type === 'turn');
   assert.equal(turns.length, 2);
