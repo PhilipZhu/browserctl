@@ -812,3 +812,17 @@ test('pi model preference precedence is option, then manifest, then environment'
     delete process.env.BROWSERCTL_PI_MODEL;
   }
 });
+
+test('model listing is honest about non-pi agents and absent workers', async () => {
+  const runner = new AgentRunner(fakeSession(), { update: async () => {} }, {
+    workspaceRoot: '/tmp/workspace',
+  });
+  await runner.select('codex', { persist: false });
+  assert.deepEqual(await runner.describeModels({ spawn: true }), {
+    agent: 'codex', supported: false, current: null, preferred: null, available: [],
+  });
+  await runner.select('pi', { persist: false });
+  const idle = await runner.describeModels();
+  assert.equal(idle.supported, true);
+  assert.deepEqual(idle.available, []);
+});

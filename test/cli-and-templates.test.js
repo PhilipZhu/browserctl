@@ -237,3 +237,19 @@ test('browser gateway requires an explicit session when several consoles are act
   const discovered = await discoverConnection({ session: '2026-07-27-02' }, root);
   assert.equal(discovered.tokenPath, selected.tokenPath);
 });
+
+test('slash command completion suggests commands and stays out of prompts', () => {
+  const { SLASH_COMMANDS, completeSlashCommand } = require('../lib/terminal-ui');
+  assert.deepEqual(completeSlashCommand('/m'), ['/model', '/models', '/memory']);
+  assert.deepEqual(completeSlashCommand('/model'), ['/model', '/models']);
+  assert.deepEqual(completeSlashCommand('/'), SLASH_COMMANDS);
+  // Exact single matches, arguments, and plain prompts produce no suggestions.
+  assert.deepEqual(completeSlashCommand('/models'), []);
+  assert.deepEqual(completeSlashCommand('/model local'), []);
+  assert.deepEqual(completeSlashCommand('hello'), []);
+  assert.deepEqual(completeSlashCommand(''), []);
+  // Every dispatched command is present so hints never suggest an unknown one.
+  for (const command of ['/agent', '/models', '/help', '/quit']) {
+    assert.ok(SLASH_COMMANDS.includes(command));
+  }
+});
