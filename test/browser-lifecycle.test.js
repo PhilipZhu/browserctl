@@ -93,3 +93,49 @@ test('chrome launch limits profile growth from component and model downloads', a
   assert.match(source, /--disable-features=OptimizationGuideModelDownloading/);
   assert.match(source, /--disk-cache-size=\d+/);
 });
+
+test('shared cookie jar exports from and imports into the live context', async () => {
+  const fsp = require('node:fs/promises');
+  const os = require('node:os');
+  const jarDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'browserctl-jar-'));
+  const jarPath = path.join(jarDirectory, 'shared-cookies.json');
+  const added = [];
+  const manager = new BrowserManager(fakeSession(), { sharedCookiesPath: jarPath });
+  manager.log = async () => {};
+  manager.browser = { isConnected: () => true };
+  manager.context = {
+    addCookies: async (cookies) => added.push(...cookies),
+    storageState: async () => ({
+      cookies: [{ name: 'login', value: 'token', domain: '.example.test', path: '/', expires: -1 }],
+    }),
+  };
+
+  const exported = await manager.exportSharedCookies();
+  assert.equal(exported.exported, 1);
+  const stat = await fsp.stat(jarPath);
+  assert.equal(stat.mode & 0o777, 0o600);
+
+  // Expired cookies are dropped on import; live ones reach the context.
+  const jar = JSON.parse(await fsp.readFile(jarPath, 'utf8'));
+  jar.cookies.push({ name: 'stale', domain: '.example.test', path: '/', expires: 1 });
+  await fsp.writeFile(jarPath, JSON.stringify(jar));
+  const imported = await manager.importSharedCookies();
+  assert.equal(imported.imported, 1);
+  assert.deepEqual(added.map((cookie) => cookie.name), ['login']);
+
+  await fsp.rm(jarDirectory, { recursive: true, force: true });
+});
+
+test('shared cookie jar is optional and a missing jar is a quiet no-op', async () => {
+  const disabled = new BrowserManager(fakeSession(), {});
+  disabled.context = { addCookies: async () => { throw new Error('must not be called'); } };
+  assert.deepEqual(await disabled.importSharedCookies(), { imported: 0 });
+  assert.deepEqual(await disabled.exportSharedCookies(), { exported: 0 });
+
+  const missing = new BrowserManager(fakeSession(), {
+    sharedCookiesPath: '/nonexistent/shared-cookies.json',
+  });
+  missing.log = async () => {};
+  missing.context = { addCookies: async () => { throw new Error('must not be called'); } };
+  assert.deepEqual(await missing.importSharedCookies(), { imported: 0 });
+});

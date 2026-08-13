@@ -59,6 +59,8 @@ Options:
   --url <url>           Override the application URL.
   --chrome <path>       Override the Chrome executable.
   --headless            Run Chrome headless (default is headed; intended for diagnostics).
+  --shared-cookies <p>  Override the cross-session cookie jar path.
+  --no-shared-cookies   Keep this session's cookies fully isolated.
   --no-browser          Skip Chrome (diagnostics/tests only).
   --help                Show this help.
   --version             Show the version.
@@ -84,6 +86,7 @@ function parseArguments(argv) {
     chromePath: null,
     headless: false,
     noBrowser: false,
+    sharedCookiesPath: undefined,
     verbose: false,
     inlineSource: null,
     memoryMode: null,
@@ -113,7 +116,11 @@ function parseArguments(argv) {
     } else if (argument === '--chrome') {
       options.chromePath = requireValue(index, argument);
       index += 1;
-    } else if (argument === '--headless') options.headless = true;
+    } else if (argument === '--shared-cookies') {
+      options.sharedCookiesPath = path.resolve(requireValue(index, argument));
+      index += 1;
+    } else if (argument === '--no-shared-cookies') options.sharedCookiesPath = null;
+    else if (argument === '--headless') options.headless = true;
     else if (argument === '--no-browser') options.noBrowser = true;
     else if (argument === '--verbose') options.verbose = true;
     else if (argument === '--memory') {
@@ -287,6 +294,11 @@ async function main(argv = process.argv.slice(2)) {
         chromePath: options.chromePath,
         workingDirectory: RUN_DIRECTORY,
         recoveredSession: session.openedExisting,
+        // Logins carry across sessions through the shared jar; every other part
+        // of browser state stays inside this session's own profile.
+        sharedCookiesPath: options.sharedCookiesPath === undefined
+          ? path.join(DEFAULT_SESSIONS_DIRECTORY, 'shared-cookies.json')
+          : options.sharedCookiesPath,
         extensions,
         workflowStore,
         onStateChange: async (state, bridge) => {

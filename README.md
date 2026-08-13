@@ -70,6 +70,13 @@ Reopen or inspect sessions:
 ./run.js --list
 ```
 
+Cookies (logins) are shared across sessions through a single owner-only jar at
+`<sessions-root>/shared-cookies.json`: it is imported into the browser at launch
+and rewritten from the live browser on every save and at shutdown. Everything
+else — tabs, localStorage, and the rest of the Chrome profile — stays inside each
+session's own `browser-profile/`. Use `--no-shared-cookies` for a fully isolated
+session, or `--shared-cookies <path>` to point at a different jar.
+
 A new session starts at `about:blank` when no URL is supplied. An existing session
 keeps its saved URL, tabs, browser profile, managed conversation, extension
 registration, and extension-owned state.
