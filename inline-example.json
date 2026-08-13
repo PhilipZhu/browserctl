@@ -1,0 +1,20 @@
+{
+  "agent": "pi",
+  "verbose": false,
+  "continueOnError": false,
+  "steps": [
+    {
+      "command": "status"
+    },
+    {
+      "command": "launch"
+    },
+    {
+      "command": "eval",
+      "code": "return { title: await page.title(), url: page.url() };"
+    },
+    {
+      "query": "Inspect the live managed tab and give a concise status report."
+    }
+  ]
+}

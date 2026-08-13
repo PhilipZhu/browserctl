@@ -1,0 +1,10 @@
+.env*
+.github/
+.gitattributes
+CONTRIBUTING.md
+local/
+scripts/
+test/
+weekly-logs/
+templates/
+coverage/

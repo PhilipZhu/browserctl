@@ -1,0 +1,24 @@
+{
+  "name": "browserctl-session-console",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Recoverable headed-Chrome session console with extension-driven automation.",
+  "bin": {
+    "browserctl-session": "run.js",
+    "browserctl": "browserctl.js"
+  },
+  "scripts": {
+    "start": "node run.js",
+    "sessions": "node run.js --list",
+    "test": "node --test test/*.test.js",
+    "check": "node --check run.js && node --check browserctl.js && node --check lib/*.js && node --check scripts/*.js && node --check examples/*/*.js",
+    "audit:public": "node scripts/audit-public.js",
+    "verify": "npm run check && npm test && npm run audit:public"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "dependencies": {
+    "playwright-core": "^1.62.0"
+  }
+}

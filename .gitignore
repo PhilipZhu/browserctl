@@ -1,0 +1,58 @@
+# Dependencies and package-manager caches
+node_modules/
+.npm/
+*.tgz
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.token
+credentials*.json
+secrets*.json
+
+# Runtime sessions and user-authored prompts
+weekly-logs/
+templates/
+downloads/
+screenshots/
+browser-profile/
+
+# Application-specific plugins and machine environments
+local/*
+!local/README.md
+!local/plugins/
+!local/plugins/README.md
+!local/environments/
+!local/environments/README.md
+local/plugins/*
+!local/plugins/README.md
+local/environments/*
+!local/environments/README.md
+
+# Agent work/context files are never repository content
+AGENTS.md
+AGENTS.dir/
+CLAUDE.md
+.codex/
+.claude/
+.pi/
+
+# Previous or imported Git metadata
+.git.backup/
+*.git-backup/
+
+# Editors, OS metadata, logs, and coverage
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log
+coverage/
+.nyc_output/
