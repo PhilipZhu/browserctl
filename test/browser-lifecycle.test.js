@@ -139,3 +139,29 @@ test('shared cookie jar is optional and a missing jar is a quiet no-op', async (
   missing.context = { addCookies: async () => { throw new Error('must not be called'); } };
   assert.deepEqual(await missing.importSharedCookies(), { imported: 0 });
 });
+
+test('profile bloat directories are pruned while user state is preserved', async () => {
+  const fsp = require('node:fs/promises');
+  const os = require('node:os');
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'browserctl-prune-'));
+  const session = fakeSession();
+  session.paths.browserProfile = path.join(root, 'browser-profile');
+  await fsp.mkdir(path.join(session.paths.browserProfile, 'OptGuideOnDeviceModel', '2026.1'), { recursive: true });
+  await fsp.writeFile(path.join(session.paths.browserProfile, 'OptGuideOnDeviceModel', '2026.1', 'weights.bin'), 'x'.repeat(1024));
+  await fsp.mkdir(path.join(session.paths.browserProfile, 'component_crx_cache'), { recursive: true });
+  await fsp.mkdir(path.join(session.paths.browserProfile, 'Default'), { recursive: true });
+  await fsp.writeFile(path.join(session.paths.browserProfile, 'Default', 'Cookies'), 'user-state');
+
+  const manager = new BrowserManager(session, {});
+  manager.log = async () => {};
+  const removed = await manager.pruneProfileBloat('test');
+  assert.deepEqual(removed.sort(), ['OptGuideOnDeviceModel', 'component_crx_cache']);
+  await assert.rejects(fsp.access(path.join(session.paths.browserProfile, 'OptGuideOnDeviceModel')));
+  assert.equal(
+    await fsp.readFile(path.join(session.paths.browserProfile, 'Default', 'Cookies'), 'utf8'),
+    'user-state',
+  );
+  // A second pass over the already-clean profile is a quiet no-op.
+  assert.deepEqual(await manager.pruneProfileBloat('test'), []);
+  await fsp.rm(root, { recursive: true, force: true });
+});
