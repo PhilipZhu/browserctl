@@ -358,6 +358,11 @@ async function main(argv = process.argv.slice(2)) {
       await runner.select(options.agent);
     }
     if (options.piModel) await runner.setPiModel(options.piModel);
+    if (browser) {
+      // Lets the live agent execute validated application actions mid-turn
+      // through the bridge instead of ending its turn on the first one.
+      browser.semanticActionHandler = (proposal) => runner.executeSemanticProposal(proposal);
+    }
 
     const onSignal = (signal) => {
       signalReceived = signal;

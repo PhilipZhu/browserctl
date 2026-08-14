@@ -290,14 +290,25 @@ semanticCapabilities: [
 ],
 ```
 
-The agent sees that schema plus the current state at `statePath`. When Pi decides
-that this capability expresses the human's outcome, it calls the host-provided
-`browserctl_propose_action` tool as its final action. The call includes the fields
-below plus short `interpretation` and `rationale` strings. The tool records intent
-only and returns `terminate: true`; module authors do not register or execute it.
-Browserctl consumes the tool event even when Pi emits no assistant text.
+The agent sees that schema plus the current state at `statePath`. Whenever Pi
+decides that a capability expresses the next needed outcome, it calls the
+host-provided `browserctl_propose_action` tool with the fields below plus short
+`interpretation` and `rationale` strings. The tool sends the proposal to
+browserctl over the authenticated loopback bridge; browserctl validates it,
+runs the registered hook, and the verified result (or the exact error) returns
+as the tool result, so the agent can keep working — several actions in one
+turn, or a corrected attempt after an error — until the request is fully
+addressed. Module authors do not register or execute the tool. Consecutive
+identical proposals are refused as loops, and a generous per-request action
+backstop stops runaways loudly.
 
-Other supported agents use the equivalent internal final envelope:
+Other supported agents return the equivalent JSON envelope as their final
+response; browserctl executes it and hands the verified result back in a
+continuation turn, chaining until the agent stops proposing actions. A
+completed request is then audited once against what verifiably ran, and any
+unaddressed remainder is reported and given one follow-up turn.
+
+The Pi tool call envelope:
 
 ```json
 {

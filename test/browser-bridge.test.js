@@ -144,3 +144,36 @@ test('bridge rejects invalid tokens without executing code', async (t) => {
   assert.equal(response.ok, false);
   assert.match(response.error, /authentication/);
 });
+
+test('the semantic bridge action routes to the live console handler', async () => {
+  const {BrowserBridge} = require('../lib/browser-bridge');
+  const os = require('node:os');
+  const fsp = require('node:fs/promises');
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'browserctl-bridge-semantic-'));
+  const handled = [];
+  const manager = {
+    log: async () => {},
+    semanticActionHandler: async (proposal) => {
+      handled.push(proposal);
+      return {output: 'verified and applied'};
+    },
+  };
+  const bridge = new BrowserBridge(manager, {paths: {logs: root}});
+  const ok = await bridge.dispatch({
+    token: bridge.token,
+    action: 'semantic',
+    proposal: {capability: 'demo.add-item'},
+  });
+  assert.deepEqual(ok, {ok: true, result: {output: 'verified and applied'}});
+  assert.deepEqual(handled, [{capability: 'demo.add-item'}]);
+
+  delete manager.semanticActionHandler;
+  const refused = await bridge.dispatch({
+    token: bridge.token,
+    action: 'semantic',
+    proposal: {capability: 'demo.add-item'},
+  });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /No live agent console/);
+  await fsp.rm(root, {recursive: true, force: true});
+});

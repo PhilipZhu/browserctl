@@ -826,3 +826,123 @@ test('model listing is honest about non-pi agents and absent workers', async () 
   assert.equal(idle.supported, true);
   assert.deepEqual(idle.available, []);
 });
+
+function semanticFixture() {
+  const invoked = [];
+  const extension = {
+    id: 'demo-app',
+    semanticCapabilities: [{
+      id: 'demo.add-item',
+      label: 'Demo add',
+      description: 'Adds an item.',
+      effect: 'Adds one item.',
+      hook: 'demo.add',
+      targets: [{
+        id: 'items',
+        label: 'Items',
+        description: 'Demo items.',
+        accepts: ['url'],
+        operations: ['add'],
+        bind: {url: {sourceUrl: '$url'}},
+      }],
+      formatResult: (result) => result?.output,
+    }],
+  };
+  const runner = new AgentRunner(fakeSession(), { update: async () => {} }, {
+    workspaceRoot: '/tmp/workspace',
+  });
+  runner.extensions = [extension];
+  const outputs = [];
+  runner.activeSemanticTurn = {
+    onOutput: (chunk) => outputs.push(chunk),
+    semanticExtensions: [extension],
+    extensionContext: {
+      invokeBrowserHook: async (name, payload) => {
+        invoked.push({name, payload});
+        return {output: `verified ${payload.values?.sourceUrl || ''}`.trim()};
+      },
+    },
+  };
+  return {runner, invoked, outputs};
+}
+
+test('mid-turn semantic actions execute, record, and stream their results', async () => {
+  const {runner, invoked, outputs} = semanticFixture();
+  const first = await runner.executeSemanticProposal({
+    capability: 'demo.add-item',
+    target: 'items',
+    operation: 'add',
+    resources: [{type: 'url', url: 'https://example.test/a'}],
+  });
+  assert.equal(first.output, 'verified https://example.test/a');
+  const second = await runner.executeSemanticProposal({
+    capability: 'demo.add-item',
+    target: 'items',
+    operation: 'add',
+    resources: [{type: 'url', url: 'https://example.test/b'}],
+  });
+  assert.equal(second.output, 'verified https://example.test/b');
+  assert.equal(invoked.length, 2, 'both actions must reach the hook in one turn');
+  assert.equal(runner.currentRequestActions.length, 2);
+  assert.deepEqual(
+    runner.currentRequestActions.map((action) => action.capability),
+    ['demo.add-item', 'demo.add-item'],
+  );
+  assert.ok(outputs.join('').includes('verified https://example.test/a'));
+});
+
+test('semantic actions outside a live turn or past the backstop are refused', async () => {
+  const {runner} = semanticFixture();
+  runner.semanticActionLimit = 1;
+  await runner.executeSemanticProposal({
+    capability: 'demo.add-item',
+    target: 'items',
+    operation: 'add',
+    resources: [{type: 'url', url: 'https://example.test/a'}],
+  });
+  await assert.rejects(
+    () => runner.executeSemanticProposal({
+      capability: 'demo.add-item',
+      target: 'items',
+      operation: 'add',
+      resources: [{type: 'url', url: 'https://example.test/b'}],
+    }),
+    /runaway backstop/,
+  );
+  runner.activeSemanticTurn = null;
+  await assert.rejects(
+    () => runner.executeSemanticProposal({capability: 'demo.add-item'}),
+    /No live agent turn/,
+  );
+});
+
+test('completion verdicts parse tolerantly and fail closed to null', () => {
+  const {parseCompletionVerdict} = require('../lib/agent-runner');
+  assert.deepEqual(
+    parseCompletionVerdict('{"complete": false, "remainder": "fill one ad"}'),
+    {complete: false, remainder: 'fill one ad'},
+  );
+  assert.deepEqual(
+    parseCompletionVerdict('Sure.\n```json\n{"complete": true, "remainder": ""}\n```'),
+    {complete: true, remainder: ''},
+  );
+  assert.deepEqual(
+    parseCompletionVerdict('prose before {"complete": false, "remainder": "step two"} after'),
+    {complete: false, remainder: 'step two'},
+  );
+  assert.equal(parseCompletionVerdict('no json here'), null);
+  assert.equal(parseCompletionVerdict('{"unrelated": true}'), null);
+  assert.equal(parseCompletionVerdict(''), null);
+});
+
+test('the pi action tool executes through the bridge instead of terminating the turn', async () => {
+  const fsp = require('node:fs/promises');
+  const source = await fsp.readFile(
+    require('node:path').join(__dirname, '..', 'lib', 'pi-semantic-extension.ts'),
+    'utf8',
+  );
+  assert.ok(!source.includes('terminate: true'), 'the action tool must not end the agent turn');
+  assert.match(source, /action: 'semantic'/);
+  assert.match(source, /BROWSERCTL_BROWSER_TOKEN_FILE/);
+  assert.match(source, /as many times as the request needs/);
+});
