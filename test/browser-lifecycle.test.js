@@ -148,6 +148,8 @@ test('profile bloat directories are pruned while user state is preserved', async
   session.paths.browserProfile = path.join(root, 'browser-profile');
   await fsp.mkdir(path.join(session.paths.browserProfile, 'OptGuideOnDeviceModel', '2026.1'), { recursive: true });
   await fsp.writeFile(path.join(session.paths.browserProfile, 'OptGuideOnDeviceModel', '2026.1', 'weights.bin'), 'x'.repeat(1024));
+  await fsp.mkdir(path.join(session.paths.browserProfile, 'Safe Browsing'), { recursive: true });
+  // The component package cache is intentionally retained, not pruned.
   await fsp.mkdir(path.join(session.paths.browserProfile, 'component_crx_cache'), { recursive: true });
   await fsp.mkdir(path.join(session.paths.browserProfile, 'Default'), { recursive: true });
   await fsp.writeFile(path.join(session.paths.browserProfile, 'Default', 'Cookies'), 'user-state');
@@ -155,7 +157,8 @@ test('profile bloat directories are pruned while user state is preserved', async
   const manager = new BrowserManager(session, {});
   manager.log = async () => {};
   const removed = await manager.pruneProfileBloat('test');
-  assert.deepEqual(removed.sort(), ['OptGuideOnDeviceModel', 'component_crx_cache']);
+  assert.deepEqual(removed.sort(), ['OptGuideOnDeviceModel', 'Safe Browsing']);
+  await fsp.access(path.join(session.paths.browserProfile, 'component_crx_cache'));
   await assert.rejects(fsp.access(path.join(session.paths.browserProfile, 'OptGuideOnDeviceModel')));
   assert.equal(
     await fsp.readFile(path.join(session.paths.browserProfile, 'Default', 'Cookies'), 'utf8'),
@@ -164,4 +167,38 @@ test('profile bloat directories are pruned while user state is preserved', async
   // A second pass over the already-clean profile is a quiet no-op.
   assert.deepEqual(await manager.pruneProfileBloat('test'), []);
   await fsp.rm(root, { recursive: true, force: true });
+});
+
+test('component packages are swept from downloads while user files are kept', async () => {
+  const fsp = require('node:fs/promises');
+  const os = require('node:os');
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'browserctl-downloads-'));
+  const session = fakeSession();
+  session.paths.downloads = path.join(root, 'downloads');
+  await fsp.mkdir(session.paths.downloads, { recursive: true });
+
+  const componentName = '35cb7ccf-4c5c-45ec-9cd2-13e859d7c299';
+  const write = (name, contents) => fsp.writeFile(path.join(session.paths.downloads, name), contents);
+  await write(componentName, Buffer.concat([Buffer.from('Cr24'), Buffer.alloc(64)]));
+  // A user file named like a UUID but not a CRX must survive.
+  await write('c57604ac-82ad-4136-8515-7564d72aeb89', 'a report the user downloaded');
+  // A real CRX the user downloaded deliberately keeps its own filename.
+  await write('my-extension.crx', Buffer.concat([Buffer.from('Cr24'), Buffer.alloc(16)]));
+  await write('README.md', '# Downloads');
+
+  const manager = new BrowserManager(session, {});
+  manager.log = async () => {};
+  const removed = await manager.pruneComponentDownloads('test');
+  assert.deepEqual(removed, [componentName]);
+  const survivors = (await fsp.readdir(session.paths.downloads)).sort();
+  assert.deepEqual(survivors, ['README.md', 'c57604ac-82ad-4136-8515-7564d72aeb89', 'my-extension.crx']);
+  // Idempotent, and a missing downloads directory is a quiet no-op.
+  assert.deepEqual(await manager.pruneComponentDownloads('test'), []);
+  await fsp.rm(root, { recursive: true, force: true });
+  assert.deepEqual(await manager.pruneComponentDownloads('test'), []);
+});
+
+test('the component package cache is retained to avoid repeated re-downloads', () => {
+  assert.ok(BrowserManager.PROFILE_BLOAT_DIRECTORIES.includes('Safe Browsing'));
+  assert.ok(!BrowserManager.PROFILE_BLOAT_DIRECTORIES.includes('component_crx_cache'));
 });
