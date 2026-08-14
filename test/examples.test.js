@@ -75,11 +75,8 @@ test('root documentation gives a complete install, first-run, and continuation p
 });
 
 test('GitHub homepage cannot be shadowed by a higher-priority README', async () => {
+  // GitHub prefers .github/README.md over the root README, so that path must
+  // never exist. The repository ships no .github directory at all.
   const shadowReadme = path.join(__dirname, '..', '.github', 'README.md');
   await assert.rejects(() => fsp.access(shadowReadme), {code: 'ENOENT'});
-  const automation = await fsp.readFile(
-    path.join(__dirname, '..', '.github', 'AUTOMATION.md'),
-    'utf8',
-  );
-  assert.match(automation, /Repository Automation/);
 });
