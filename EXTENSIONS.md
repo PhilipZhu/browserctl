@@ -223,6 +223,7 @@ Only `id` is required. Every other field is optional.
   agentInstructions,
   semanticCapabilities,
   workflows,
+  quickActions,
   beforeTurn,
   canHandleTurn,
   handleTurn,
@@ -232,6 +233,43 @@ Only `id` is required. Every other field is optional.
   browserLifecycle,
 }
 ```
+
+## Quick actions
+
+`quickActions` feeds a small collapsed “✦ Quick actions” bar rendered at the
+bottom-left of every page in the managed browser (the workflow plan panel keeps
+the bottom-right). It exists for one purpose: reminding a returning human of the
+few main actions that are integral to the whole task but easy to forget between
+sessions. It is a memory aid, not a command reference — the agent console remains
+the primary interface, and every hint doubles as an example of what the human can
+simply type there.
+
+```js
+quickActions: [
+  {
+    id: 'publish',                       // stable, unique within the module
+    label: 'Publish the draft',          // short button text (≤48 chars)
+    hint: 'Prepares and verifies; nothing is released.',   // one line (≤140 chars)
+    prompt: 'Prepare the current draft for publication and verify it without releasing.',
+  },
+],
+```
+
+Clicking an entry queues its `prompt` to the live console agent over the same
+authenticated binding the workflow panel uses; the console picks it up as the
+next turn, prefixed with which action the human clicked. A prompt that needs
+specifics should instruct the agent to ask for them (“Ask me for the image
+URLs, then…”) rather than embed placeholders.
+
+Design contract — hold this line in future work:
+
+- Register only actions the human may not remember but needs for the end-to-end
+  task. Anything discoverable in the moment, or rarely needed, stays out.
+- One-line hints in plain language; no jargon, no nested menus, at most
+  8 actions total across all loaded modules (enforced).
+- Ids are namespaced as `<extensionId>:<id>`; duplicates and oversized text fail
+  loudly at console start, never silently.
+- The bar renders nothing when no module registers actions.
 
 ## Dispatch order
 

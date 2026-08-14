@@ -11,6 +11,7 @@ const { extensionEntries, loadExtensions } = require('./lib/extension-loader');
 const { SessionStore } = require('./lib/session-store');
 const { TerminalChat, chooseSession, paint } = require('./lib/terminal-ui');
 const {WorkflowStore} = require('./lib/workflow-store');
+const {ActionBar} = require('./lib/action-bar');
 const { ageLabel } = require('./lib/utils');
 
 const VERSION = '2.0.0';
@@ -242,6 +243,7 @@ async function main(argv = process.argv.slice(2)) {
     session,
   });
   const workflowStore = await new WorkflowStore(session, extensions).initialize();
+  const actionBar = new ActionBar(extensions);
 
   let browser = null;
   let conversationStore = null;
@@ -306,6 +308,7 @@ async function main(argv = process.argv.slice(2)) {
           : options.sharedCookiesPath,
         extensions,
         workflowStore,
+        actionBar,
         onStateChange: async (state, bridge) => {
           await store.update(session, {
             targetUrl,
@@ -391,6 +394,7 @@ async function main(argv = process.argv.slice(2)) {
           agentRunner: runner,
           templatesDirectory: DEFAULT_TEMPLATES_DIRECTORY,
           workflowStore,
+          actionBar,
         });
         await chat.start();
       }
