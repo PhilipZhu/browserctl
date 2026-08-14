@@ -171,6 +171,16 @@ actions in `saves/workflow-state.json`. A closed-shadow-root panel lets the huma
 retry a step or send a free-form correction. Application names, values, branching,
 and safety policy remain in the extension.
 
+### Quick actions
+
+Extensions may also register a few one-line quick actions. They render as a
+collapsed “✦ Quick actions” pill at the bottom-left of every managed page — a
+memory aid for the main actions a returning human tends to forget. Clicking an
+entry sends its example prompt to the live console agent over the same
+authenticated binding the workflow panel uses. At most eight entries are allowed
+across all modules, and malformed or duplicate entries fail loudly at console
+start. See [EXTENSIONS.md](EXTENSIONS.md) → “Quick actions” for the contract.
+
 ## Interactive commands
 
 ```text
@@ -217,6 +227,7 @@ An extension may provide:
 - contextual instructions and structured state;
 - typed semantic capabilities and validated browser hooks;
 - resumable workflows;
+- quick actions for the in-browser reminder bar;
 - before/after/recovery turn callbacks; and
 - `pageReady`, `beforeSave`, `context`, and `beforeStop` lifecycle handlers.
 
