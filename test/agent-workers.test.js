@@ -160,9 +160,11 @@ test('Pi RPC worker preserves a successful semantic tool-only turn without final
   });
   assert.equal(result.output, '');
   assert.deepEqual(result.semanticProposals, [{
-    capability: 'example.edit', target: 'ads', operation: 'upsert', resources: [],
+    proposal: {capability: 'example.edit', target: 'ads', operation: 'upsert', resources: []},
+    executed: false,
+    failed: false,
   }]);
-  assert.deepEqual(announced, result.semanticProposals);
+  assert.deepEqual(announced, result.semanticProposals.map((entry) => entry.proposal));
 });
 
 test('Codex app-server worker uses one ephemeral in-memory thread', async (t) => {
@@ -176,4 +178,40 @@ test('Claude stream worker keeps continuity with transcript persistence disabled
   const worker = await exerciseWorker(t, ClaudeStreamWorker, 'claude');
   assert.equal(worker.status().transcriptPersistence, false);
   assert.deepEqual(worker.status().usage, { input_tokens: 9, output_tokens: 2 });
+});
+
+test('Pi RPC worker marks bridge-executed semantic actions as executed', async (t) => {
+  const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'browserctl-worker-executed-'));
+  t.after(() => fsp.rm(directory, {recursive: true, force: true}));
+  const executable = path.join(directory, 'fake-pi');
+  await fsp.writeFile(executable, `#!/usr/bin/env node
+'use strict';
+const readline = require('node:readline');
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+const rl = readline.createInterface({input: process.stdin});
+rl.on('line', (line) => {
+  const message = JSON.parse(line);
+  if (message.type === 'get_state') {
+    send({id: message.id, type: 'response', command: 'get_state', success: true, data: {}});
+    return;
+  }
+  if (message.type === 'prompt') {
+    const args = {capability: 'example.edit', target: 'ads', operation: 'add', resources: []};
+    send({type: 'tool_execution_start', toolCallId: 'act-1', toolName: 'browserctl_propose_action', args});
+    send({type: 'tool_execution_end', toolCallId: 'act-1', toolName: 'browserctl_propose_action',
+      args, isError: false, result: {details: {proposal: args, executed: true, output: 'verified'}}});
+    send({type: 'agent_end'});
+    send({id: message.id, type: 'response', command: 'prompt', success: true, data: {}});
+  }
+});
+`, {mode: 0o700});
+  const worker = new PiRpcWorker({command: executable, cwd: directory, env: process.env});
+  t.after(() => worker.stop());
+  await worker.start();
+  const result = await worker.run('do the thing', () => {}, false, {});
+  assert.deepEqual(result.semanticProposals, [{
+    proposal: {capability: 'example.edit', target: 'ads', operation: 'add', resources: []},
+    executed: true,
+    failed: false,
+  }]);
 });
